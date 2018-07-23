@@ -18,6 +18,14 @@ configuration:
         description: A template used to construct the name for a new Mari project.  This
                      template must contain a 'name' key.
 
+    link_entity_types:
+        type: list
+        default_value: []
+        allows_empty: True
+        description: "List of entity types that should show up in the list of links when using
+                     the auto completer. Default is all entity types allowed for Task.entity"
+        values: { type: str }
+
     get_project_creation_args_hook:
         type: hook
         parameters: [sg_publish_data]
@@ -58,11 +66,13 @@ description: "Shotgun aware project management for Mari"
 
 # Required minimum versions for this item to run
 requires_shotgun_version:
-requires_core_version: "v0.14.66"
+requires_core_version: "v0.18.122"
+requires_engine_version: 
 
 # the engines that this app can operate in:
 supported_engines: ["tk-mari"] 
 
-# the frameworks required to run this app
 frameworks:
-- {"name": "tk-framework-widget", "version": "v0.2.x"}
+    - {"name": "tk-framework-widget", "version": "v0.2.x"}
+    - {"name": "tk-framework-shotgunutils", "version": "v5.x.x"}
+    - {"name": "tk-framework-qtwidgets", "version": "v2.x.x", "minimum_version": "v2.7.0"}

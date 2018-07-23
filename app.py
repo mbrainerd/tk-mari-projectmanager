@@ -39,6 +39,25 @@ class MariProjectManager(Application):
         """
         self.log_debug("%s: Destroying..." % self)
 
+    @property
+    def context_change_allowed(self):
+        """
+        Specifies that context changes are allowed.
+        """
+        return True
+
+    def post_context_change(self, old_context, new_context):
+        """
+        Called after a context change.
+
+        :param old_context:     The context being changed away from.
+        :type old_context: :class:`~sgtk.Context`
+        :param new_context:     The context being changed to.
+        :type new_context: :class:`~sgtk.Context`
+        """
+        if self.__project_mgr.new_project_dialog:
+            self.__project_mgr.new_project_dialog.refresh()
+
     def start_new_project_ui(self):
         """
         Show the New Project UI
@@ -65,4 +84,3 @@ class MariProjectManager(Application):
         :returns:               The new Mari Project instance if successful
         """
         return self.__project_mgr.create_new_project(name, sg_publish_data)
-
