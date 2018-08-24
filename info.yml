@@ -17,6 +17,7 @@ configuration:
         fields: context, name
         description: A template used to construct the name for a new Mari project.  This
                      template must contain a 'name' key.
+        allows_empty: True
 
     link_entity_types:
         type: list
