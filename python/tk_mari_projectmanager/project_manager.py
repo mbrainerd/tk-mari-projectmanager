@@ -97,6 +97,8 @@ class ProjectManager(object):
                                                       channels_to_import = channels_to_import,
                                                       project_meta_options = project_meta_options,
                                                       objects_to_load = objects_to_load)
+        # set metadata on the project
+        self._app.engine.set_metadata(new_project, self._app.context)
 
         try:
             hook_res = self._app.execute_hook_method("post_project_creation_hook",
