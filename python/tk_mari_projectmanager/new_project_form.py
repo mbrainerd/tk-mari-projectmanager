@@ -12,6 +12,7 @@
 UI for creating a new project
 """
 
+import traceback
 import sgtk
 from sgtk.platform.qt import QtGui, QtCore
 
@@ -40,30 +41,27 @@ class NewProjectForm(QtGui.QWidget):
     # emitted when the user requests to remove publishes from the publish list
     remove_publishes = QtCore.Signal(QtGui.QWidget, list)
 
-    def __init__(self, app, init_proc, preview_updater, parent=None):
+    def __init__(self, app, init_proc, initial_name, manager, parent=None):
         """
         Construction
 
-        :param app:             The current app
-        :param init_proc:       Called at the end of construction to allow the calling
-                                code to hook up any signals, etc.
-        :param preview_updater: A background worker that can be used to update the
-                                project name preview
-        :param parent:          The parent QWidget
+        :param app: The current app
+        :param init_proc: Called at the end of construction to allow the calling
+            code to hook up any signals, etc.
+        :param initial_name: The initial name to use in the name field
+        :param manager: The active Mari project manager object.
+        :param parent: The parent QWidget
         """
         QtGui.QWidget.__init__(self, parent)
-
-        self.__preview_updater = preview_updater
-        if self.__preview_updater:
-            self.__preview_updater.work_done.connect(self._preview_info_updated)
-
-        # store the current app
-        self.__app = app
 
         # set up the UI
         from .ui.new_project_form import Ui_NewProjectForm
         self.__ui = Ui_NewProjectForm()
         self.__ui.setupUi(self)
+
+        # store the current app
+        self._app = app
+        self._manager = manager
 
         # create a background task manager for each of our components to use
         self.__task_manager = task_manager.BackgroundTaskManager(self)
@@ -86,7 +84,7 @@ class NewProjectForm(QtGui.QWidget):
 
         # you can set a context using the `set_context()` method. Here we set it
         # to the current bundle's context
-        self.__ui.context_widget.set_context(self.__app.context)
+        self.__ui.context_widget.set_context(self._app.context)
 
         # connect the signal emitted by the selector widget when a context is
         # selected. The connected callable should accept a context object.
@@ -108,6 +106,7 @@ class NewProjectForm(QtGui.QWidget):
         self.__ui.publishes_line.setStyleSheet("#publishes_line{color: %s;}" % clr_str)
 
         # initialise the UI:
+        self.__ui.name_edit.setText(initial_name)
         self.update_publishes()
         init_proc(self)
 
@@ -118,7 +117,7 @@ class NewProjectForm(QtGui.QWidget):
     def project_name(self):
         """
         Access the entered project name
-        :returns:    The project name the user entered
+        :returns: The project name the user entered
         """
         return self.__ui.name_edit.text()
 
@@ -126,12 +125,12 @@ class NewProjectForm(QtGui.QWidget):
         """
         Refresh the UI after a context change.
         """
-        default_name = self.__app.get_setting("default_project_name")
+        default_name = self._app.get_setting("default_project_name")
         self.__ui.name_edit.setText(default_name)
 
         # If specified, restrict what entries should show up in the list of links when using
         # the auto completer.
-        link_entity_types = self.__app.get_setting("link_entity_types")
+        link_entity_types = self._app.get_setting("link_entity_types")
         if link_entity_types:
             self.__ui.context_widget.restrict_entity_types(link_entity_types)
         else:
@@ -140,10 +139,10 @@ class NewProjectForm(QtGui.QWidget):
 
         # Enable project settings if we're in a Task context
         self.__ui.context_warning_label.setText("")
-        if self.__app.context.task:
+        if self._app.context.task:
             # Also check that the selected entity matches one of the allowed entity types
             if link_entity_types:
-                ent_type = self.__app.context.entity["type"]
+                ent_type = self._app.context.entity["type"]
                 if ent_type in link_entity_types:
                     self.__ui.project_groupbox.setEnabled(True)
                 else:
@@ -157,15 +156,18 @@ class NewProjectForm(QtGui.QWidget):
             self.__ui.project_groupbox.setEnabled(False)
 
         # update the name preview:
-        if self.__preview_updater:
-            self.__preview_updater.do(default_name)
+        try:
+            self._on_name_edited(default_name)
+        except Exception as e:
+            logger.warning("Unable to generate project name preview: %s" % e)
+            logger.warning(traceback.format_exc())
 
     def update_publishes(self, sg_publish_data=None):
         """
         Update the list of publishes
 
-        :param sg_publish_data: The list of publishes to present.  This is a list of
-                                Shotgun entity dictionaries.
+        :param list sg_publish_data: The list of publishes to present. This is a list of
+            Shotgun entity dictionaries.
         """
         # clear the existing publishes from the list:
         self.__ui.publish_list.clear()
@@ -184,15 +186,11 @@ class NewProjectForm(QtGui.QWidget):
         Called when the widget is closed so that any cleanup can be
         done. Overrides QWidget.clostEvent.
 
-        :param event:    The close event.
+        :param event: The close event.
         """
         # make sure the publish list BrowserWidget is
         # cleaned up properly
         self.__ui.publish_list.destroy()
-
-        # disconnect the preview updater:
-        if self.__preview_updater:
-            self.__preview_updater.work_done.disconnect(self._preview_info_updated)
 
         # register the data fetcher with the global schema manager
         shotgun_globals.unregister_bg_task_manager(self.__task_manager)
@@ -207,8 +205,8 @@ class NewProjectForm(QtGui.QWidget):
         self.__ui.context_widget.save_recent_contexts()
 
         # reset the context if it was changed
-        if self.__app.context != self.__app.engine.context:
-            self.__app.change_context(self.__app.engine.context)
+        if self._app.context != self._app.engine.context:
+            self._app.change_context(self._app.engine.context)
 
         # return result from base implementation
         return QtGui.QWidget.closeEvent(self, event)
@@ -224,8 +222,8 @@ class NewProjectForm(QtGui.QWidget):
         self.__ui.context_widget.set_context(context)
 
         # If the context has changed, refresh the application
-        if context != self.__app.context:
-            self.__app.change_context(context)
+        if context != self._app.context:
+            self._app.change_context(context)
 
     def _on_create_clicked(self):
         """
@@ -242,21 +240,19 @@ class NewProjectForm(QtGui.QWidget):
     def _on_name_edited(self, txt):
         """
         Called when the user edits the name
-        :param txt:    The current text entered into the edit control
+        :param str txt: The current text entered into the edit control
         """
-        # update the name preview:
-        if self.__preview_updater:
-            self.__preview_updater.do(self.project_name)
+        self._preview_info_updated(self._manager._generate_new_project_name(txt))
 
     def _on_remove_selected_publishes(self, publish_ids):
         """
         Called when the user requests to remove some publishes from the list
 
-        :param publish_ids:    The list of publish ids to be removed
+        :param list publish_ids: The list of publish ids to be removed
         """
         self.remove_publishes.emit(self, publish_ids)
 
-    def _preview_info_updated(self, name, result):
+    def _preview_info_updated(self, result):
         """
         Called when the worker thread has finished generating the
         new project name
@@ -274,3 +270,4 @@ class NewProjectForm(QtGui.QWidget):
             message = result.get("message", "")
             warning = "<p style='color:rgb(226, 146, 0)'>%s</p>" % message
             self.__ui.name_preview_label.setText(warning)
+
