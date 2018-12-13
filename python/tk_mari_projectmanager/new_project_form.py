@@ -156,11 +156,7 @@ class NewProjectForm(QtGui.QWidget):
             self.__ui.project_groupbox.setEnabled(False)
 
         # update the name preview:
-        try:
-            self._on_name_edited(default_name)
-        except Exception as e:
-            logger.warning("Unable to generate project name preview: %s" % e)
-            logger.warning(traceback.format_exc())
+        self._on_name_edited(default_name)
 
     def update_publishes(self, sg_publish_data=None):
         """

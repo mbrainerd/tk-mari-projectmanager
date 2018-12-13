@@ -150,6 +150,8 @@ class ProjectManager(object):
 
         if not name:
             return {"message":"Please enter a name!"}
+        if not project_name_template:
+            return {"message": "Unable to find `template_new_project_name` for this context!"}
         if not project_name_template.keys["name"].validate(name):
             return {"message":"Your name contains illegal characters!"}
 
