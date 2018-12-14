@@ -12,8 +12,6 @@
 Manage project creation in a Toolkit aware fashion
 """
 
-from .async_worker import AsyncWorker
-
 import sgtk
 from sgtk import TankError
 from sgtk.platform.qt import QtGui
@@ -67,9 +65,11 @@ class ProjectManager(object):
         # use a hook to retrieve the project creation settings to use:
         hook_res = {}
         try:
-            hook_res = self._app.execute_hook_method("get_project_creation_args_hook",
-                                                     "get_project_creation_args",
-                                                     sg_publish_data = sg_publish_data)
+            hook_res = self._app.execute_hook_method(
+                "get_project_creation_args_hook",
+                "get_project_creation_args",
+                sg_publish_data=sg_publish_data
+            )
             if hook_res == None:
                 hook_res = {}
             elif not isinstance(hook_res, dict):
@@ -91,17 +91,21 @@ class ProjectManager(object):
             sgtk.platform.change_context(self._app.context)
 
         # and create the project using the tk-mari engine helper method:
-        new_project = self._app.engine.create_project(project_name,
-                                                      sg_publish_data,
-                                                      channels_to_create = channels_to_create,
-                                                      channels_to_import = channels_to_import,
-                                                      project_meta_options = project_meta_options,
-                                                      objects_to_load = objects_to_load)
+        new_project = self._app.engine.create_project(
+            project_name,
+            sg_publish_data,
+            channels_to_create=channels_to_create,
+            channels_to_import=channels_to_import,
+            project_meta_options=project_meta_options,
+            objects_to_load=objects_to_load,
+        )
 
         try:
-            hook_res = self._app.execute_hook_method("post_project_creation_hook",
-                                                     "post_project_creation",
-                                                     sg_publish_data = sg_publish_data)
+            hook_res = self._app.execute_hook_method(
+                "post_project_creation_hook",
+                "post_project_creation",
+                sg_publish_data=sg_publish_data
+            )
             if hook_res == None:
                 hook_res = {}
             elif not isinstance(hook_res, dict):
@@ -119,21 +123,18 @@ class ProjectManager(object):
         Show the new project dialog
         """
         self.__new_project_publishes = []
+        default_name = self._app.get_setting("default_project_name")
 
-        # create a background worker that will be responsible for updating
-        # the project name preview as the user enters a name.
-        worker_cb = lambda name: self._generate_new_project_name(name)
-        preview_updater = AsyncWorker(worker_cb)
-        try:
-            preview_updater.start()
-
-            # show modal dialog:
-            res, new_project_form = self._app.engine.show_modal("New Project", self._app, NewProjectForm,
-                                                                self._app, self._init_new_project_form,
-                                                                preview_updater)
-        finally:
-            # wait for the background thread to finish!
-            preview_updater.stop()
+        # show modal dialog:
+        res, new_project_form = self._app.engine.show_modal(
+            "New Project",
+            self._app,
+            NewProjectForm,
+            self._app,
+            self._init_new_project_form,
+            default_name,
+            self,
+        )
 
     def _generate_new_project_name(self, name):
         """
@@ -149,6 +150,8 @@ class ProjectManager(object):
 
         if not name:
             return {"message":"Please enter a name!"}
+        if not project_name_template:
+            return {"message": "Unable to find `template_new_project_name` for this context!"}
         if not project_name_template.keys["name"].validate(name):
             return {"message":"Your name contains illegal characters!"}
 
